@@ -1,0 +1,6 @@
+# lazy build scripts
+*.sh
+
+# binaries
+bin/
+bin/*
