@@ -1,19 +1,32 @@
 # VirtualBox Curses Remote
 
-An ncurses client written in c for interfacing remotely (via ssh) with a server running VirtualBox. This is designed to be used with VRDE remote desktop enabled on each vm client.
+An ncurses client written in python3 for interfacing remotely with a linux server running ssh and VirtualBox. This is designed to be used with VRDE remote desktop enabled on each vm client.
 
-This is a work in progress.
+This is a quick and dirty solution to managing numerous virtualmachines on a machine over a network.
+
+Dependencies: curses, ssh4py, rdesktop
 
 ## Completed:
-
-* SSH command relay
+* Curses Menu for selecting machines
+* Open rdesktop for the selected machine
+* Turn selected machine on and off
 * SSH public key authentication
 
-## In Progress:
-
-* Ncurses menu system
-
 ## Todo:
+### General:
+* Installers
+* Config files
 
+### Curses:
+* Menu class options ( scrolling, numerical labels, etc. )
+* MenuItem object for more customizability
+* Scrolling textboxes
+
+### Virtualbox
+* Snapshots
+* Managing VM Properties
+* VM Info
+* VM password authentication
+
+### SSH:
 * SSH password authentication
-* Effective text parsing
