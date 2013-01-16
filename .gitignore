@@ -1,0 +1,9 @@
+# Scratch paper
+test.py
+
+# Left vim open
+.*.swp
+
+# Don't steal my cache!
+__pycache__
+

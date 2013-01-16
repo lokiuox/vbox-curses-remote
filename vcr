@@ -6,14 +6,6 @@ import re
 import subprocess
 from menu import *
 
-# TODO:
-#	Menu class options (scrolling, numeric, etc)
-#	Snapshots
-#	Manage Rdesktop settings
-#	VM info (scrolling box)
-#	Nice cmd output (turn on/off)
-#	config file
-
 vcr_hostuser = "vm" 
 vcr_hostname = "tc-eden"
 vcr_hostport = 22
@@ -24,33 +16,36 @@ def main(screen):
 def eprint(screen,text):
 	screen.addstr(1, 1, text, curses.A_NORMAL)
 
-# work on this
 def list_vms(screen):
 
 	# SSH
 	session = open_session(vcr_hostuser, vcr_hostname, vcr_hostport)
 	vmstr = remote_cmd(session, "vboxmanage list vms")
 
-	# Remove: blank lines, quotes, and UUIDs
-	vmlist = re.sub(r'(^\n|"|{[0-9a-z\-]*})', "", vmstr).split("\n")
+	# Remove blank lines, quotes, and UUIDs
+	vmlist = re.sub(r'(^\n|"| ?{[0-9a-z\-]*})', "", vmstr).split("\n")
 
-	portlist = []
 	# Get ports
+	portlist = []
 	for vm in vmlist:
-		portlist.append(get_port(session, vm))
+		port = get_port(session,vm)
+		if port != None:
+			portlist.append("ON - RDP: " + port)
+		else:
+			portlist.append("OFF")
 
-	# Set padding to 3 characters after the longest vm-name
+	# Set padding to two character after the longest vm-name
 	padding = len(max(vmlist, key=len)) + 1
 
-	# Create a new menu
+	# Create a menu of VMs
 	vmenu = Menu(screen)
 	vmenu.set_title("Choose a VM")
 	vmenu.set_noback(True)
 	for vm,port in zip(vmlist,portlist):
 		if vm != "":
-			vmenu.add(vm.ljust(padding) + port, manage_vm, screen, session, vm)
+			vmenu.add_item(MenuItem(vm.ljust(padding) + port, manage_vm, screen, session, vm))
 
-	vmenu.add("Quit", vmenu.close)
+	vmenu.add_item(MenuItem("Quit", vmenu.close))
 
 	screen.clear()
 	vmenu.draw(2,4)
@@ -59,31 +54,55 @@ def get_port(session, vmname):
 	vminfo = remote_cmd(session, "vboxmanage showvminfo " + vmname)
 	for line in vminfo.split("\n"):
 		if "VRDE port:" in line:
-			return "ON - RDP: " + re.sub(r'\D', "",line)
-	return "OFF"
+			return re.sub(r'\D', "",line)
+	return None
 
 def manage_vm(screen, session, vmname):
 
-	port = re.sub(r'\D',"",get_port(session, vmname))
+	port = str(get_port(session, vmname))
 
+	if r_headless() == True:
+		if port == "None":
+			start_vm_text = "Start VM"
+		else:
+			start_vm_text = "RDP Port: " + port
+
+	else:
+		start_vm_text = "RDesktop"
+		if port == "None":
+			start_vm_text += " & Start VM"
+	
 	cmenu = Menu(screen)
 	cmenu.set_title("Managing: " + vmname + " | RDP: " + port)
-	cmenu.add("rdesktop (+ start VM)", rdesktop, session, vmname, port)
-	cmenu.add("Turn On / Off", power_menu, screen, session, vmname)
-	cmenu.add("Snapshot", eprint, screen, "FEATURE NOT YET IMPLEMENTED")
-	cmenu.add("Manage rdesktop", eprint, screen, "FEATURE NOT YET IMPLEMENTED")
-	cmenu.add("VM information", eprint, screen, "FEATURE NOT YET IMPLEMENTED")
-	cmenu.add("Back", cmenu.close)
+
+	start_vm_item = MenuItem(start_vm_text,    startvm_rdp, screen,  session, cmenu, vmname,  port)
+	cmenu.add_item(start_vm_item)
+	cmenu.add_item(MenuItem("Turn On / Off",   power_menu,  screen,  session, vmname))
+	cmenu.add_item(MenuItem("Snapshot",        eprint,      screen,  "FEATURE NOT YET IMPLEMENTED"))
+	cmenu.add_item(MenuItem("Manage rdesktop", eprint,      screen,  "FEATURE NOT YET IMPLEMENTED"))
+	cmenu.add_item(MenuItem("VM information",  eprint,      screen,  "FEATURE NOT YET IMPLEMENTED"))
+	cmenu.add_item(MenuItem("Back",            cmenu.close))
 	screen.clear()
 	cmenu.draw(2, 4)
 
-def rdesktop(session, vmname, port):
-	if get_port(session, vmname) == "OFF":
+def startvm_rdp(screen, session, menu, vmname, port):
+	# Make sure it's off, to supress errors.
+	if get_port(session, vmname) == None:
 		remote_cmd(session, "vboxmanage startvm " + vmname + " --type headless")
 		port = get_port(session, vmname)
 
-	cmd = "rdesktop -K " + vcr_hostname + ":" + port + " > /dev/null 2>&1"
-	process = subprocess.Popen(cmd, stdout=None, stderr=None, shell=True)
+	# Check for active X11 Environment
+	if r_headless() == False:
+		cmd = "rdesktop -K " + vcr_hostname + ":" + port + " > /dev/null 2>&1"
+		process = subprocess.Popen(cmd, stdout=None, stderr=None, shell=True)
+
+	menu.close()
+	manage_vm(screen, session, vmname)
+	
+
+# Return True if vcr is being run remotely
+def r_headless():
+	return (os.environ.get('DISPLAY') == None)
 
 def power_menu(screen, session, vmname):
 
@@ -94,11 +113,11 @@ def power_menu(screen, session, vmname):
 
 	pmenu = Menu(screen)
 	pmenu.set_title("Power Options for: " + vmname)
-	pmenu.add("Turn on",          remote_cmd, session, turnon)
-	pmenu.add("Turn off (ACPI)",  remote_cmd, session, acpioff)
-	pmenu.add("Turn off (Force)", remote_cmd, session, forceoff)
-	pmenu.add("Reset (Force)",    remote_cmd, session, reset)
-	pmenu.add("Back", pmenu.close)
+	pmenu.add_item(MenuItem("Turn On",          remote_cmd, session, turnon))
+	pmenu.add_item(MenuItem("Turn Off (ACPI)",  remote_cmd, session, acpioff))
+	pmenu.add_item(MenuItem("Turn Off (Force)", remote_cmd, session, forceoff))
+	pmenu.add_item(MenuItem("Reset (Force)",    remote_cmd, session, reset))
+	pmenu.add_item(MenuItem("Back", pmenu.close))
 	screen.clear()
 	pmenu.draw(2, 4)
 
