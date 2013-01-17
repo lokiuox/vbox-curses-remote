@@ -3,14 +3,22 @@ import curses
 
 class Menu:
 
-	def __init__(self,scr):
-		self.items     = []
-		self.screen    = scr
-		self.numeric   = True
-		self.noback    = False
-		self.closemenu = False
-		self.alttext   = True
-		self.title     = None
+	def __init__(self, scr, *title):
+		self.items     = []     # Array - MenuItem array
+		self.screen    = scr    # Curses screen object
+
+		# Default Values
+		self.numeric   = True   # Bool - Use of the numpad
+		self.noback    = False  # Bool - Use of the left arrow key to return  
+		self.closemenu = False  # Bool - This kills the crab, er... menu
+		self.tooltips  = True   # Bool - Display item tooltips under menu title
+		self.refresh   = 5      # Int  - Refresh rate in seconds
+
+		# Set the title if provided
+		if len(title) > 0:
+			self.title  = title[0]
+		else:
+			self.title  = None
 	
 	def set_title(self, title):
 		self.title = " " + title
@@ -24,12 +32,15 @@ class Menu:
 	def set_numeric(self, truefalse):
 		self.numeric = truefalse
 
-	def enable_altext(self, truefalse):
-		self.alttext = truefalse
+	def enable_tooltips(self, truefalse):
+		self.tooltips = truefalse
 
+	def set_refresh(self, rate):
+		self.refresh = rate
+	
 	def size(self):
 		return len(self.items)
-	
+
 	def close(self):
 		self.closemenu = True
 	
@@ -43,7 +54,7 @@ class Menu:
 		
 		if self.title != None:
 			x += 2
-		elif self.alttext == True:
+		elif self.tooltips == True:
 			x += 1
 
 		curses.start_color()
@@ -90,10 +101,10 @@ class Menu:
 			else:
 				if self.title != None:
 					self.screen.addstr(x-2, y, str(self.title).ljust(padding), title_color)
-				if self.alttext == True:
+				if self.tooltips == True:
 					self.screen.move(x-1, 0)
 					self.screen.clrtoeol()
-					self.screen.addstr(x-1, y+1, str(self.items[pos].get_alttext()) + " ", tooltip_color)
+					self.screen.addstr(x-1, y+1, str(self.items[pos].get_tooltip()) + " ", tooltip_color)
 				self.screen.border(0)
 				nx = x
 				for item in self.items:
@@ -112,38 +123,45 @@ class Menu:
 
 class MenuItem:
 
-	def __init__(self, text, action, *args):
+	def __init__(self, text, action, *tooltip):
+		
 		self.text = text
 		self.action = action
-		self.args = args
-		self.alttext = ""
+		if len(tooltip) > 0:
+			self.tooltip = tooltip
+		else:
+			self.tooltip = ""
 	
 	def set_text(self, text):
-		self.text = test
+		self.text = text
 
-	def get_text(self):
-		return self.text
-
+	def set_tooltip(self, tooltip):
+		self.tooltip = text
+	
 	def set_action(self, action):
 		self.action = action
+	
+	def get_text(self):
+		if type(self.text) is tuple:
+			return self.text[0](*self.text[1:])
+		if type(self.text) is not str:
+			return self.text()
+		return self.text
 
+	def get_tooltip(self):
+		if type(self.tooltip) is tuple:
+			return self.tooltip[0](*self.tooltip[1:])
+		if type(self.tooltip) is not str:
+			return self.tooltip()
+		return self.tooltip
+	
 	def get_action(self):
 		return self.action
-	
+
 	def do_action(self):
-		self.action(*self.args)
-
-	def set_args(self, *args):
-		self.args = args
-
-	def get_args(self):
-		return self.args
-
-	def set_alttext(self, text):
-		self.alttext = text
-
-	def get_alttext(self):
-		return self.alttext
+		if type(self.action) is tuple:
+			return self.action[0](*self.action[1:])
+		return self.action()
 
 if __name__ == '__main__':
 	print("Please run the correct file. This is not the correct file.")

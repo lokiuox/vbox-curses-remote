@@ -38,16 +38,16 @@ def list_vms(screen):
 	padding = len(max(vmlist, key=len)) + 1
 
 	# Create a menu of VMs
-	vmenu = Menu(screen)
-	vmenu.set_title("Choose a VM")
+	vmenu = Menu(screen, "Choose a VM")
 	vmenu.set_noback(True)
 	for vm,port in zip(vmlist,portlist):
 		if vm != "":
-			vmenu.add_item(MenuItem(vm.ljust(padding) + port, manage_vm, screen, session, vm))
+			vmenu.add_item(MenuItem(vm.ljust(padding) + port, (manage_vm, screen, session, vm)))
 
 	vmenu.add_item(MenuItem("Quit", vmenu.close))
 
 	screen.clear()
+	#vmenu.refresh(5)
 	vmenu.draw(2,4)
 
 def get_port(session, vmname):
@@ -72,15 +72,14 @@ def manage_vm(screen, session, vmname):
 		if port == "None":
 			start_vm_text += " & Start VM"
 	
-	cmenu = Menu(screen)
-	cmenu.set_title("Managing: " + vmname + " | RDP: " + port)
+	cmenu = Menu(screen, "Managing: " + vmname + " | RDP: " + port)
 
-	start_vm_item = MenuItem(start_vm_text,    startvm_rdp, screen,  session, cmenu, vmname,  port)
+	start_vm_item = MenuItem(start_vm_text,    (startvm_rdp, screen,  session, cmenu, vmname, port))
 	cmenu.add_item(start_vm_item)
-	cmenu.add_item(MenuItem("Turn On / Off",   power_menu,  screen,  session, vmname))
-	cmenu.add_item(MenuItem("Snapshot",        eprint,      screen,  "FEATURE NOT YET IMPLEMENTED"))
-	cmenu.add_item(MenuItem("Manage rdesktop", eprint,      screen,  "FEATURE NOT YET IMPLEMENTED"))
-	cmenu.add_item(MenuItem("VM information",  eprint,      screen,  "FEATURE NOT YET IMPLEMENTED"))
+	cmenu.add_item(MenuItem("Turn On / Off",   (power_menu,  screen,  session, vmname)))
+	cmenu.add_item(MenuItem("Snapshot",        (eprint,      screen,  "FEATURE NOT YET IMPLEMENTED")))
+	cmenu.add_item(MenuItem("Manage rdesktop", (eprint,      screen,  "FEATURE NOT YET IMPLEMENTED")))
+	cmenu.add_item(MenuItem("VM information",  (eprint,      screen,  "FEATURE NOT YET IMPLEMENTED")))
 	cmenu.add_item(MenuItem("Back",            cmenu.close))
 	screen.clear()
 	cmenu.draw(2, 4)
@@ -88,7 +87,7 @@ def manage_vm(screen, session, vmname):
 def startvm_rdp(screen, session, menu, vmname, port):
 	# Make sure it's off, to supress errors.
 	if get_port(session, vmname) == None:
-		remote_cmd(session, "vboxmanage startvm " + vmname + " --type headless")
+		remote_cmd(session, "vboxmanage startvm " + vmname + " --type headless& > /dev/null 2>&1")
 		port = get_port(session, vmname)
 
 	# Check for active X11 Environment
@@ -106,18 +105,17 @@ def r_headless():
 
 def power_menu(screen, session, vmname):
 
-	turnon   = "vboxmanage startvm "   + vmname + " --type headless"
-	acpioff  = "vboxmanage controlvm " + vmname + " acpipowerbutton"
-	forceoff = "vboxmanage controlvm " + vmname + " poweroff"
-	reset    = "vboxmanage controlvm " + vmname + " reset"
+	turnon   = "vboxmanage startvm "   + vmname + " --type headless& > /dev/null 2>&1"
+	acpioff  = "vboxmanage controlvm " + vmname + " acpipowerbutton& > /dev/null 2>&1"
+	forceoff = "vboxmanage controlvm " + vmname + " poweroff& > /dev/null 2>&1"
+	reset    = "vboxmanage controlvm " + vmname + " reset& > /dev/null 2>&1"
 
-	pmenu = Menu(screen)
-	pmenu.set_title("Power Options for: " + vmname)
-	pmenu.add_item(MenuItem("Turn On",          remote_cmd, session, turnon))
-	pmenu.add_item(MenuItem("Turn Off (ACPI)",  remote_cmd, session, acpioff))
-	pmenu.add_item(MenuItem("Turn Off (Force)", remote_cmd, session, forceoff))
-	pmenu.add_item(MenuItem("Reset (Force)",    remote_cmd, session, reset))
-	pmenu.add_item(MenuItem("Back", pmenu.close))
+	pmenu = Menu(screen, "Power Options for: " + vmname)
+	pmenu.add_item(MenuItem("Turn On",          (remote_cmd, session, turnon)))
+	pmenu.add_item(MenuItem("Turn Off (ACPI)",  (remote_cmd, session, acpioff)))
+	pmenu.add_item(MenuItem("Turn Off (Force)", (remote_cmd, session, forceoff)))
+	pmenu.add_item(MenuItem("Reset (Force)",    (remote_cmd, session, reset)))
+	pmenu.add_item(MenuItem("Back",             pmenu.close))
 	screen.clear()
 	pmenu.draw(2, 4)
 
