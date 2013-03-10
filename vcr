@@ -5,8 +5,8 @@ import re
 import subprocess
 from menu import *
 
-vcr_hostuser = "vm" 
-vcr_hostname = "tc-eden"
+vcr_hostuser = "root" 
+vcr_hostname = "192.168.8.10"
 vcr_hostport = 22
 
 def main(screen):
@@ -21,7 +21,7 @@ def remote_cmd(cmd):
 def list_vms(screen):
 
 	# SSH
-	vmstr = remote_cmd("vboxmanage list vms")
+	vmstr = remote_cmd("VBoxManage list vms")
 
 	# Remove blank lines, quotes, and UUIDs
 	vmlist = re.sub(r'(^\n|"| ?{[0-9a-z\-]*})', "", vmstr).split("\n")
@@ -50,7 +50,7 @@ def get_vm_status(vmname, padding):
 	return vmname.ljust(padding) + "OFF"
 
 def get_port(vmname):
-	vminfo = remote_cmd("vboxmanage showvminfo " + vmname)
+	vminfo = remote_cmd("VBoxManage showvminfo " + vmname)
 	for line in vminfo.split("\n"):
 		if "VRDE port:" in line:
 			return re.sub(r'\D', "",line)
@@ -93,7 +93,7 @@ def startvm_rdp(vmname):
 	
 	# Make sure it's off, to supress errors.
 	if port == None:
-		remote_cmd("vboxmanage startvm " + vmname + " --type headless& > /dev/null 2>&1")
+		remote_cmd("VBoxManage startvm " + vmname + " --type headless& > /dev/null 2>&1")
 
 	# Check for active X11 Environment
 	if r_headless() == False:
@@ -107,10 +107,10 @@ def r_headless():
 
 def power_menu(screen, vmname):
 
-	turnon   = "vboxmanage startvm "   + vmname + " --type headless& > /dev/null 2>&1"
-	acpioff  = "vboxmanage controlvm " + vmname + " acpipowerbutton& > /dev/null 2>&1"
-	forceoff = "vboxmanage controlvm " + vmname + " poweroff& > /dev/null 2>&1"
-	reset    = "vboxmanage controlvm " + vmname + " reset& > /dev/null 2>&1"
+	turnon   = "VBoxManage startvm "   + vmname + " --type headless& > /dev/null 2>&1"
+	acpioff  = "VBoxManage controlvm " + vmname + " acpipowerbutton& > /dev/null 2>&1"
+	forceoff = "VBoxManage controlvm " + vmname + " poweroff& > /dev/null 2>&1"
+	reset    = "VBoxManage controlvm " + vmname + " reset& > /dev/null 2>&1"
 
 	pmenu = Menu(screen, "Power Options for: " + vmname)
 	pmenu.add_item(MenuItem("Turn On",          (remote_cmd, turnon)))
