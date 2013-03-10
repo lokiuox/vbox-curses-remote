@@ -38,7 +38,9 @@ class Menu:
 	def update_thread(self):
 		t_run = 0
 		while not self.closemenu:
-			self.do_refresh()
+			#self.do_refresh()
+			for i in self.items:
+				i.do_update()
 			time.sleep(self.refresh)
 
 	def key_thread(self):
@@ -47,9 +49,9 @@ class Menu:
 			key = stdkey.getch()
 			Menu.keyq.put(key)
 
-	def do_refresh(self):
-		for i in self.items:
-			i.do_update()
+	#def do_refresh(self):
+	#	for i in self.items:
+	#		i.do_update()
 
 	def set_title(self, title):
 		self.title = " " + title
@@ -93,20 +95,27 @@ class Menu:
 			Menu.keyq.put(key)
 
 	def draw(self, x, y):
-		self.do_refresh()
-			
+		
+		# Start gathering button/tooltip text asynchronously.
 		threading.Thread(target = self.update_thread).start()
-		#do_refresh()
+
+		# Start keylistener asynchronously
+		# IF it isn't already running
+		# This is so that the draw-loop doesn't block on getch()
 		if Menu.key_thread_object == None:
 			Menu.key_thread_object = threading.Thread(target = self.key_thread).start()
 
+		# Double check that the menu isn't going to autoclose
 		self.closemenu = False
 		
+		# Make room for the title and tooltips
+		# IF they exist.
 		if self.title != None:
 			x += 2
 		elif self.tooltips == True:
 			x += 1
 
+		# Init stuff
 		curses.start_color()
 		curses.init_pair(1, curses.COLOR_RED,    curses.COLOR_WHITE)
 		curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLUE)
@@ -120,6 +129,7 @@ class Menu:
 		color = unsel_color
 		curses.curs_set(0)
 
+		# Figure out how wide to make the background
 		padding = self.width
 		for i in self.items:
 			le = len(i.get_text()) + 2
@@ -132,21 +142,9 @@ class Menu:
 		if tlen > padding:
 			padding = tlen
 
+		# Menu loop
 		while self.closemenu == False:
 			
-			# Retrieve key sent from key thread
-			if not Menu.keyq.empty():
-				key = Menu.keyq.get()
-			else:
-				time.sleep(.025)
-				key = ord('z')
-
-			# Perform navigation before drawing
-			if key == curses.KEY_DOWN and pos < self.size() - 1:
-				pos += 1	
-			if key == curses.KEY_UP and pos > 0:
-				pos -= 1
-
 			# Draw the title if it exists
 			if self.title != None:
 				self.screen.addstr(x-2, y, str(" " + self.title).ljust(padding), title_color)
@@ -157,9 +155,10 @@ class Menu:
 				self.screen.clrtoeol()
 				self.screen.addstr(x-1, y+1, str(self.items[pos].get_tooltip()) + " ", tooltip_color)
 
-			# Refresh screen border
+			# Draw screen border
 			self.screen.border(0)
-
+	
+			# Draw each item the menu
 			nx = x
 			for item in self.items:
 				if pos == nx - x:
@@ -175,28 +174,39 @@ class Menu:
 			
 			self.screen.refresh()
 
-			#if not self.q.empty():
-			#	self.q.get()()
+			# Retrieve key sent from key thread
+			if not Menu.keyq.empty():
+				key = Menu.keyq.get()
+			else:
+				time.sleep(.025)
+				key = ord('z')
 			
-			if key == curses.KEY_LEFT and self.noback == False:
+			# Key handling 
+			if key == curses.KEY_DOWN and pos < self.size() - 1:
+				pos += 1	
+
+			elif key == curses.KEY_UP and pos > 0:
+				pos -= 1
+
+			elif key == curses.KEY_LEFT and self.noback == False:
 				self.close()
 			
-			if key == ord('\n') or key == curses.KEY_RIGHT:
+			elif key == ord('\n') or key == curses.KEY_RIGHT:
 				self.items[pos].do_action()
 			
-			if self.numeric == True and (chr(key) >= "0" and chr(key) <= str(self.size())):
+			elif self.numeric == True and (chr(key) >= "0" and chr(key) <= str(self.size())):
 				pos = int(chr(key)) - 1
 				self.items[pos].do_action()
 		
 		# TODO: Clear the menu only, not whole curses screen.
-		self.thread_break = True
 		self.screen.clear()
+		self.thread_break = True
 
 class MenuItem:
 
 	def __init__(self, text, action, *tooltip):
 		
-		self.disp_text = ""
+		self.disp_text = None
 		self.disp_tooltip = ""
 		
 		self.text = text
@@ -220,41 +230,46 @@ class MenuItem:
 		self.action = action
 
 	def do_update(self):
-		threading.Thread(target=self.update_text).start()
-		threading.Thread(target=self.update_tooltip).start()
+		#threading.Thread(target=self.update_text).start()
+		#threading.Thread(target=self.update_tooltip).start()
+		self.update_text()
+		self.update_tooltip()
 
 	def get_text(self):
-		if self.disp_text == "":
+		if self.disp_text == None:
 			self.update_text()
 		while not self.text_update_q.empty():
-			self.disp_text = self.text_update_q.get()
-
+			self.disp_text = self.text_update_q.get_nowait()
 		return self.disp_text
 
 	def get_tooltip(self):
-		if self.disp_tooltip == "":
-			self.update_tooltip()
 		while not self.tooltip_update_q.empty:
-			self.disp_tooltip = self.tooltip_update_q.get()
-
+			self.disp_tooltip = self.tooltip_update_q.get_nowait()
 		return self.disp_tooltip
 
 	def update_text(self):
+		# Function with args
 		if type(self.text) is tuple:
 			self.text_update_q.put(self.text[0](*self.text[1:]))
+		# Function without args
 		elif type(self.text) is not str:
 			self.text_update_q.put(self.text())
+		# String (hopefully)
 		else:
 			self.text_update_q.put(self.text)
 
 	def update_tooltip(self):
+		# Function with args
 		if type(self.tooltip) is tuple:
 			self.tooltip_update_q.put(self.tooltip[0](*self.tooltip[1:]))
+		# Function without args
 		elif type(self.tooltip) is not str:
 			self.tooltip_update_q.put(self.tooltip())
+		# String (hopefully)
 		else:
 			self.tooltip_update_q.put(self.tooltip)
-	
+		
+
 	def get_action(self):
 		return self.action
 
@@ -264,6 +279,6 @@ class MenuItem:
 		return self.action()
 
 if __name__ == '__main__':
-	print("Please run the correct file. This is not the correct file.")
+	print("Please run 'vcr'.")
 
 

@@ -4,11 +4,11 @@ An ncurses client written in python3 for interfacing remotely with a linux serve
 
 This is a quick and dirty solution to managing numerous virtual machines on single host over a network.
 
-Dependencies: curses, ssh4py, rdesktop
+Dependencies: python3, curses, rdesktop, openssh or equivalent
 
 ## Completed:
 * Curses Menu for selecting machines
-* MenuItem object with alt-text
+* MenuItem object with tooltip
 * Open rdesktop for the selected machine
 * Turn selected machine on and off
 * SSH public key authentication
@@ -18,6 +18,7 @@ Dependencies: curses, ssh4py, rdesktop
 * Installers
 * Config files
 * Python Documentation
+* Fix thread blocking on subprocess
 
 ### Curses:
 * Menu class options ( scrolling, etc. )
@@ -28,7 +29,3 @@ Dependencies: curses, ssh4py, rdesktop
 * Managing VM Properties
 * VM Info
 * VM password authentication
-
-### SSH:
-* SSH password authentication
-* Public Key location config

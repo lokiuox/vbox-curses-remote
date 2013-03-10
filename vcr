@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 import curses
+import os
 import re
 import subprocess
 from menu import *
-import os
 
 vcr_hostuser = "vm" 
 vcr_hostname = "tc-eden"
@@ -16,9 +16,7 @@ def eprint(screen,text):
 	screen.addstr(1, 1, text, curses.A_NORMAL)
 
 def remote_cmd(cmd):
-	subp = subprocess.check_output("ssh -t -q " + vcr_hostuser + "@" 
-			+ vcr_hostname + " -p " + str(vcr_hostport) + " " + cmd + "; exit 0", shell=True).decode("utf-8")
-	return subp
+	return subprocess.check_output("ssh -t -q " + vcr_hostuser + "@" + vcr_hostname + " " + cmd + "; exit 0", shell=True).decode("utf-8")
 
 def list_vms(screen):
 
