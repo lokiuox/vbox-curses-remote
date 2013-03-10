@@ -6,7 +6,7 @@ from menu import *
 import os
 
 vcr_hostuser = "root" 
-vcr_hostname = "192.168.8.8"
+vcr_hostname = "192.168.8.10"
 vcr_hostport = 22
 
 def main(screen):
