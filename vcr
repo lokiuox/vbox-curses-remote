@@ -5,8 +5,8 @@ import subprocess
 from menu import *
 import os
 
-vcr_hostuser = "vm" 
-vcr_hostname = "tc-eden"
+vcr_hostuser = "root" 
+vcr_hostname = "192.168.8.8"
 vcr_hostport = 22
 
 def main(screen):
