@@ -4,15 +4,20 @@ import threading
 import queue
 import time
 
-from sympy import N
-
 class Menu:
 
 	# Static threading "magic"
 	# key queue contains key presses
-	key_thread_object = None
 	keyq = queue.Queue()
 	screen = None
+	x = 0
+	y = 0
+	loading_scr = None
+
+	@staticmethod
+	def show_loading():
+		threading.Thread(target=Menu.loading_scr.draw).start()
+		
 
 	@staticmethod
 	def key_thread():
@@ -21,28 +26,28 @@ class Menu:
 			Menu.keyq.put(key)
 
 	@staticmethod
-	def global_init(screen):
+	def global_init(screen, x = 0, y = 0):
+		Menu.x = x
+		Menu.y = y
 		Menu.screen = screen
 		t = threading.Thread(target=Menu.key_thread)
 		t.setDaemon(True)
 		t.start()
+		Menu.loading_scr = Menu("Loading...")
 
 
 	def __init__(self, *title):
 		self.items     = []     # Array - MenuItem array
-		#self.screen    = scr    # Curses screen object
 
 		# Default Values
 		self.numeric   = True   # Bool - Use of the numpad
 		self.noback    = False  # Bool - Use of the left arrow key to return  
 		self.closemenu = False  # Bool - This kills the crab, er... menu
-		self.tooltips  = True   # Bool - Display item tooltips under menu title
+		self.tooltips  = False   # Bool - Display item tooltips under menu title
 		self.width     = 1      # Int  - Minimum width of the menu
 		self.refresh   = 5      # Int  - Refresh rate in seconds
 										# Menu also updates upon selection
 		self.thread_break = False
-
-		#self.q = queue.Queue(maxsize=1)
 
 		# Set the title if provided
 		if len(title) > 0:
@@ -55,10 +60,6 @@ class Menu:
 			for i in self.items:
 				i.do_update()
 			time.sleep(self.refresh)
-
-	#def do_refresh(self):
-	#	for i in self.items:
-	#		i.do_update()
 
 	def set_title(self, title):
 		self.title = " " + title
@@ -87,13 +88,14 @@ class Menu:
 	def close(self):
 		self.closemenu = True
 		self.thread_break = True
-	
-	def clr_draw(self, x, y):
-		Menu.screen.clear()
-		self.draw(x,y)
 
-	def draw(self, x, y):
+	def draw(self, x=None, y=None):
 		
+		if x is None:
+			x = Menu.x
+		if y is None:
+			y = Menu.y
+
 		# Start gathering button/tooltip text asynchronously.
 		t = threading.Thread(target = self.update_thread)
 		t.setDaemon(True)
@@ -109,7 +111,11 @@ class Menu:
 		elif self.tooltips == True:
 			x += 1
 
+		if self.title is not None and self.title != "Loading...":
+			self.loading_scr.close()
+
 		# Init stuff
+		Menu.screen.clear()
 		curses.start_color()
 		curses.init_pair(1, curses.COLOR_RED,    curses.COLOR_WHITE)
 		curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLUE)
@@ -139,19 +145,20 @@ class Menu:
 		# Menu loop
 		while self.closemenu == False:
 
+			# Draw screen border
+			Menu.screen.border(0)
+
 			# Draw the title if it exists
 			if self.title != None:
 				Menu.screen.addstr(x-2, y, str(" " + self.title).ljust(padding), title_color)
 
-			# Draw the tooltip/section if it exists
-			if self.tooltips == True:
-				Menu.screen.move(x-1, 0)
-				Menu.screen.clrtoeol()
-				Menu.screen.addstr(x-1, y+1, str(self.items[pos].get_tooltip()) + " ", tooltip_color)
+			if len(self.items) > 0:
+				# Draw the tooltip/section if it exists
+				if self.tooltips == True:
+					Menu.screen.move(x-1, 0)
+					Menu.screen.clrtoeol()
+					Menu.screen.addstr(x-1, y+1, str(self.items[pos].get_tooltip()) + " ", tooltip_color)
 
-			# Draw screen border
-			Menu.screen.border(0)
-	
 			# Draw each item the menu
 			for idx, item in enumerate(self.items):
 				if pos == idx:
@@ -167,14 +174,10 @@ class Menu:
 			Menu.screen.refresh()
 
 			# Retrieve key sent from key thread
-			if not Menu.keyq.empty():
+			if not Menu.keyq.empty() and len(self.items) > 0:
 				key = Menu.keyq.get()
-			else:
-				time.sleep(.025)
-				key = ord('z')
-			
-			# Key handling
-			try:
+
+				# Key handling
 				if key == curses.KEY_DOWN:
 					pos += 1
 					pos %= self.size()
@@ -192,8 +195,12 @@ class Menu:
 				elif self.numeric == True and (key >= ord("0") and key <= ord(str(self.size()))):
 					pos = int(chr(key)) - 1
 					self.items[pos].do_action()
-			except Exception:
-				pass
+
+				elif key == 3: # CTRL+C
+					raise KeyboardInterrupt
+
+			else:
+				time.sleep(.025)
 		
 		# TODO: Clear the menu only, not whole curses screen.
 		Menu.screen.clear()

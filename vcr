@@ -13,13 +13,15 @@ hosts = [
 ssh_host="wgpc"
 
 def main(screen):
-	Menu.global_init(screen)
+	Menu.global_init(screen, 2, 4)
 	list_vms()
 	
 def remote_cmd(cmd):
 	return subprocess.check_output("ssh -t -q " + ssh_host + " " + cmd + "; exit 0", shell=True).decode("utf-8")
 
 def list_vms():
+	
+	Menu.show_loading()
 
 	# SSH
 	vmstr = remote_cmd("VBoxManage list vms")
@@ -47,9 +49,8 @@ def list_vms():
 		vmenu.add_item(MenuItem((get_vm_status, vm, padding), (manage_vm, vm)))
 
 	vmenu.add_item(MenuItem("Quit", vmenu.close))
-
-	Menu.screen.clear()
-	vmenu.draw(2,4)
+	Menu.loading_scr.close()
+	vmenu.draw()
 
 def get_vm_property(vm, property):
 	vminfo = remote_cmd("VBoxManage showvminfo --machinereadable " + vm[1])
@@ -71,6 +72,8 @@ def rdp_enabled(vm):
 	return get_port(vm) != "-1"
 
 def manage_vm(vm):
+	Menu.show_loading()
+
 	if is_on(vm):
 		port = str(get_port(vm))
 		cmenu = Menu(vm[0] + " | RDP: " + port)
@@ -85,8 +88,7 @@ def manage_vm(vm):
 	cmenu.add_item(MenuItem("Create Snapshot", (create_snapshot, vm)))
 	cmenu.add_item(MenuItem("Back",            cmenu.close))
 	
-	Menu.screen.clear()
-	cmenu.draw(2, 4)
+	cmenu.draw()
 
 def connect_rdp(port):
 	# Check for active X11 Environment
@@ -103,6 +105,8 @@ def create_snapshot(vm):
 	remote_cmd(cmd)
 
 def power_menu(vm):
+	Menu.show_loading()
+
 	vmname = vm[0]
 	vmguid = vm[1]
 
@@ -133,12 +137,11 @@ def power_menu(vm):
 		pmenu.add_item(MenuItem("Turn On (GUI)",         (remote_cmd, normal)))
 	
 	pmenu.add_item(MenuItem("Back", pmenu.close))
-	Menu.screen.clear()
-	pmenu.draw(2, 4)
+	pmenu.draw()
 
 if __name__ == '__main__':
 	try:
 		curses.wrapper(main)
 	except KeyboardInterrupt:
-		print("Exiting...")
+		print("Bye!")
 		sys.exit(0)
