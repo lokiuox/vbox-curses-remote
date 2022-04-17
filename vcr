@@ -13,15 +13,13 @@ hosts = [
 ssh_host="wgpc"
 
 def main(screen):
-	list_vms(screen)
+	Menu.global_init(screen)
+	list_vms()
 	
-def eprint(screen,text):
-	screen.addstr(1, 1, text, curses.A_NORMAL)
-
 def remote_cmd(cmd):
 	return subprocess.check_output("ssh -t -q " + ssh_host + " " + cmd + "; exit 0", shell=True).decode("utf-8")
 
-def list_vms(screen):
+def list_vms():
 
 	# SSH
 	vmstr = remote_cmd("VBoxManage list vms")
@@ -42,15 +40,15 @@ def list_vms(screen):
 	padding += 4
 
 	# Create a menu of VMs
-	vmenu = Menu(screen, "Choose a VM")
+	vmenu = Menu("Choose a VM")
 	vmenu.set_noback(True)
 	
 	for vm in vmlist:
-		vmenu.add_item(MenuItem((get_vm_status, vm, padding), (manage_vm, screen, vm)))
+		vmenu.add_item(MenuItem((get_vm_status, vm, padding), (manage_vm, vm)))
 
 	vmenu.add_item(MenuItem("Quit", vmenu.close))
 
-	screen.clear()
+	Menu.screen.clear()
 	vmenu.draw(2,4)
 
 def get_vm_property(vm, property):
@@ -72,22 +70,22 @@ def is_on(vm):
 def rdp_enabled(vm):
 	return get_port(vm) != "-1"
 
-def manage_vm(screen, vm):
+def manage_vm(vm):
 	if is_on(vm):
 		port = str(get_port(vm))
-		cmenu = Menu(screen, vm[0] + " | RDP: " + port)
+		cmenu = Menu(vm[0] + " | RDP: " + port)
 		if rdp_enabled(vm):
 			cmenu.add_item(MenuItem("Connect RDP", (connect_rdp, port)))
-		cmenu.add_item(MenuItem("Turn Off",        (power_menu,  screen,  vm)))
+		cmenu.add_item(MenuItem("Turn Off",        (power_menu,  vm)))
 		cmenu.add_item(MenuItem("Back",            cmenu.close))
 	else:
-		cmenu = Menu(screen, vm[0] + " | OFF")
+		cmenu = Menu(vm[0] + " | OFF")
 	
-	cmenu.add_item(MenuItem("Power Menu",      (power_menu, screen, vm)))
+	cmenu.add_item(MenuItem("Power Menu",      (power_menu, vm)))
 	cmenu.add_item(MenuItem("Create Snapshot", (create_snapshot, vm)))
 	cmenu.add_item(MenuItem("Back",            cmenu.close))
 	
-	screen.clear()
+	Menu.screen.clear()
 	cmenu.draw(2, 4)
 
 def connect_rdp(port):
@@ -104,7 +102,7 @@ def create_snapshot(vm):
 	cmd = "VBoxManage snapshot " + vm[1] + " & > /dev/null 2>&1"
 	remote_cmd(cmd)
 
-def power_menu(screen, vm):
+def power_menu(vm):
 	vmname = vm[0]
 	vmguid = vm[1]
 
@@ -120,7 +118,7 @@ def power_menu(screen, vm):
 
 	state = get_vm_property(vm, "VMState")
 
-	pmenu = Menu(screen, "Power Options for: " + vmname)
+	pmenu = Menu("Power Options for: " + vmname)
 	if state == "running":
 		pmenu.add_item(MenuItem("Turn Off (Save State)", (remote_cmd, savestate)))
 		pmenu.add_item(MenuItem("Turn Off (ACPI)",       (remote_cmd, acpioff)))
@@ -135,7 +133,7 @@ def power_menu(screen, vm):
 		pmenu.add_item(MenuItem("Turn On (GUI)",         (remote_cmd, normal)))
 	
 	pmenu.add_item(MenuItem("Back", pmenu.close))
-	screen.clear()
+	Menu.screen.clear()
 	pmenu.draw(2, 4)
 
 if __name__ == '__main__':

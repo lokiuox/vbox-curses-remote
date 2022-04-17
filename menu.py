@@ -4,18 +4,33 @@ import threading
 import queue
 import time
 
+from sympy import N
+
 class Menu:
 
 	# Static threading "magic"
 	# key queue contains key presses
 	key_thread_object = None
 	keyq = queue.Queue()
+	screen = None
 
-	def __init__(self, scr, *title):
+	@staticmethod
+	def key_thread():
+		while True:
+			key = Menu.screen.getch()
+			Menu.keyq.put(key)
+
+	@staticmethod
+	def global_init(screen):
+		Menu.screen = screen
+		t = threading.Thread(target=Menu.key_thread)
+		t.setDaemon(True)
+		t.start()
+
+
+	def __init__(self, *title):
 		self.items     = []     # Array - MenuItem array
-		self.screen    = scr    # Curses screen object
-
-		##self.keyq      = queue.Queue()
+		#self.screen    = scr    # Curses screen object
 
 		# Default Values
 		self.numeric   = True   # Bool - Use of the numpad
@@ -36,18 +51,10 @@ class Menu:
 			self.title  = None
 
 	def update_thread(self):
-		t_run = 0
 		while not self.closemenu:
-			#self.do_refresh()
 			for i in self.items:
 				i.do_update()
 			time.sleep(self.refresh)
-
-	def key_thread(self):
-		stdkey = curses.initscr()
-		while not self.thread_break and not self.closemenu:
-			key = stdkey.getch()
-			Menu.keyq.put(key)
 
 	#def do_refresh(self):
 	#	for i in self.items:
@@ -82,28 +89,15 @@ class Menu:
 		self.thread_break = True
 	
 	def clr_draw(self, x, y):
-		self.screen.clear()
+		Menu.screen.clear()
 		self.draw(x,y)
-
-	def key_qer(self):
-		
-		# Threadsafe (ish) screen for getting key commands
-		stdkey    = curses.initscr()
-
-		while self.closemenu != False:
-			key = stdkey.getch()
-			Menu.keyq.put(key)
 
 	def draw(self, x, y):
 		
 		# Start gathering button/tooltip text asynchronously.
-		threading.Thread(target = self.update_thread).start()
-
-		# Start keylistener asynchronously
-		# IF it isn't already running
-		# This is so that the draw-loop doesn't block on getch()
-		if Menu.key_thread_object == None:
-			Menu.key_thread_object = threading.Thread(target = self.key_thread).start()
+		t = threading.Thread(target = self.update_thread)
+		t.setDaemon(True)
+		t.start()
 
 		# Double check that the menu isn't going to autoclose
 		self.closemenu = False
@@ -119,7 +113,7 @@ class Menu:
 		curses.start_color()
 		curses.init_pair(1, curses.COLOR_RED,    curses.COLOR_WHITE)
 		curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLUE)
-		self.screen.keypad(1)
+		Menu.screen.keypad(1)
 		pos = 0
 		key = ord('z')
 		sel_color     = curses.color_pair(2)
@@ -144,35 +138,33 @@ class Menu:
 
 		# Menu loop
 		while self.closemenu == False:
-			
+
 			# Draw the title if it exists
 			if self.title != None:
-				self.screen.addstr(x-2, y, str(" " + self.title).ljust(padding), title_color)
+				Menu.screen.addstr(x-2, y, str(" " + self.title).ljust(padding), title_color)
 
 			# Draw the tooltip/section if it exists
 			if self.tooltips == True:
-				self.screen.move(x-1, 0)
-				self.screen.clrtoeol()
-				self.screen.addstr(x-1, y+1, str(self.items[pos].get_tooltip()) + " ", tooltip_color)
+				Menu.screen.move(x-1, 0)
+				Menu.screen.clrtoeol()
+				Menu.screen.addstr(x-1, y+1, str(self.items[pos].get_tooltip()) + " ", tooltip_color)
 
 			# Draw screen border
-			self.screen.border(0)
+			Menu.screen.border(0)
 	
 			# Draw each item the menu
-			nx = x
-			for item in self.items:
-				if pos == nx - x:
+			for idx, item in enumerate(self.items):
+				if pos == idx:
 					color = sel_color
 				else:
 					color = unsel_color
 				if self.numeric != False:
-					i_num = str(nx - x + 1) + " - "
+					i_num = str(idx + 1) + " - "
 				else:
 					i_num = ""
-				self.screen.addstr(nx, y, (" " + i_num + item.get_text()).ljust(padding), color)
-				nx += 1
+				Menu.screen.addstr(idx+x, y, (" " + i_num + item.get_text()).ljust(padding), color)
 			
-			self.screen.refresh()
+			Menu.screen.refresh()
 
 			# Retrieve key sent from key thread
 			if not Menu.keyq.empty():
@@ -181,25 +173,30 @@ class Menu:
 				time.sleep(.025)
 				key = ord('z')
 			
-			# Key handling 
-			if key == curses.KEY_DOWN and pos < self.size() - 1:
-				pos += 1	
+			# Key handling
+			try:
+				if key == curses.KEY_DOWN:
+					pos += 1
+					pos %= self.size()
 
-			elif key == curses.KEY_UP and pos > 0:
-				pos -= 1
+				elif key == curses.KEY_UP:
+					pos -= 1
+					pos %= self.size()
 
-			elif key == curses.KEY_LEFT and self.noback == False:
-				self.close()
-			
-			elif key == ord('\n') or key == curses.KEY_RIGHT:
-				self.items[pos].do_action()
-			
-			elif self.numeric == True and (chr(key) >= "0" and chr(key) <= str(self.size())):
-				pos = int(chr(key)) - 1
-				self.items[pos].do_action()
+				elif key == curses.KEY_LEFT and self.noback == False:
+					self.close()
+				
+				elif key == ord('\n') or key == curses.KEY_RIGHT:
+					self.items[pos].do_action()
+				
+				elif self.numeric == True and (key >= ord("0") and key <= ord(str(self.size()))):
+					pos = int(chr(key)) - 1
+					self.items[pos].do_action()
+			except Exception:
+				pass
 		
 		# TODO: Clear the menu only, not whole curses screen.
-		self.screen.clear()
+		Menu.screen.clear()
 		self.thread_break = True
 
 class MenuItem:
@@ -224,14 +221,12 @@ class MenuItem:
 		self.text = text
 
 	def set_tooltip(self, tooltip):
-		self.tooltip = text
+		self.tooltip = tooltip
 	
 	def set_action(self, action):
 		self.action = action
 
 	def do_update(self):
-		#threading.Thread(target=self.update_text).start()
-		#threading.Thread(target=self.update_tooltip).start()
 		self.update_text()
 		self.update_tooltip()
 
