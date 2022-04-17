@@ -2,146 +2,162 @@
 import curses
 import os, sys
 import subprocess
-
-from rx import create
 from menu import *
 
 hosts = [
 	"localhost",
 	"wgpc"
 ]
-ssh_host="wgpc"
 
-def main(screen):
-	Menu.global_init(screen, 2, 4)
-	list_vms()
-	
-def remote_cmd(cmd):
-	return subprocess.check_output("ssh -t -q " + ssh_host + " " + cmd + "; exit 0", shell=True).decode("utf-8")
+class VBoxCurses:
+	def __init__(self):
+		self.current_host=""
 
-def list_vms():
-	
-	Menu.show_loading()
+	def main(self, screen):
+		Menu.global_init(screen, 2, 4)
+		self.select_host()
+		
+	def remote_cmd(self, cmd):
+		if self.current_host == "localhost":
+			return subprocess.check_output(cmd + "; exit 0", shell=True).decode("utf-8")
+		else:
+			return subprocess.check_output("ssh -t -q " + self.current_host + " " + cmd + "; exit 0", shell=True).decode("utf-8")
 
-	# SSH
-	vmstr = remote_cmd("VBoxManage list vms")
+	def select_host(self):
+		menu = Menu("Choose a host")
+		for e in hosts:
+			menu.add_item(MenuItem(e, (self.set_host, e)))
+		menu.add_item(MenuItem("Quit", menu.close))
+		menu.draw()
 
-	# Remove blank lines, quotes, and UUIDs
-	vmlist = []
-	padding = 0
-	for vm in vmstr.strip().split("\n"):
-		if vm.strip() == "":
-			continue
-		vmname = vm.split('"')[1]
-		padding = max(padding, len(vmname))
-		vmguid = vm.split('"')[2].strip()
-		vmlist.append((vmname, vmguid))
+	def set_host(self, host):
+		self.current_host = host
+		self.list_vms()
+
+	def list_vms(self):
+		
+		Menu.show_loading()
+
+		# SSH
+		vmstr = self.remote_cmd("VBoxManage list vms")
+
+		# Remove blank lines, quotes, and UUIDs
+		vmlist = []
+		padding = 0
+		for vm in vmstr.strip().split("\n"):
+			if vm.strip() == "":
+				continue
+			vmname = vm.split('"')[1]
+			padding = max(padding, len(vmname))
+			vmguid = vm.split('"')[2].strip()
+			vmlist.append((vmname, vmguid))
 
 
-	# Set padding to two character after the longest vm-name
-	padding += 4
+		# Set padding to two character after the longest vm-name
+		padding += 4
 
-	# Create a menu of VMs
-	vmenu = Menu("Choose a VM")
-	vmenu.set_noback(True)
-	
-	for vm in vmlist:
-		vmenu.add_item(MenuItem((get_vm_status, vm, padding), (manage_vm, vm)))
+		# Create a menu of VMs
+		vmenu = Menu("Choose a VM")
+		vmenu.set_noback(True)
+		
+		for vm in vmlist:
+			vmenu.add_item(MenuItem((self.get_vm_status, vm, padding), (self.manage_vm, vm)))
 
-	vmenu.add_item(MenuItem("Quit", vmenu.close))
-	Menu.loading_scr.close()
-	vmenu.draw()
+		vmenu.add_item(MenuItem("Back", vmenu.close))
+		vmenu.draw()
 
-def get_vm_property(vm, property):
-	vminfo = remote_cmd("VBoxManage showvminfo --machinereadable " + vm[1])
-	for line in vminfo.split("\n"):
-		if line.strip().split("=")[0].startswith(property):
-			return line.strip().split("=")[1].strip('"')
+	def get_vm_property(self, vm, property):
+		vminfo = self.remote_cmd("VBoxManage showvminfo --machinereadable " + vm[1])
+		for line in vminfo.split("\n"):
+			if line.strip().split("=")[0].startswith(property):
+				return line.strip().split("=")[1].strip('"')
 
-def get_vm_status(vm, padding):
-	state = get_vm_property(vm, "VMState")
-	return vm[0].ljust(padding) + state
+	def get_vm_status(self, vm, padding):
+		state = self.get_vm_property(vm, "VMState")
+		return vm[0].ljust(padding) + state
 
-def get_port(vm):
-	return get_vm_property(vm, "vrdeport")
+	def get_port(self, vm):
+		return self.get_vm_property(vm, "vrdeport")
 
-def is_on(vm):
-	return get_vm_property(vm, "VMState") == "running"
+	def is_on(self, vm):
+		return self.get_vm_property(vm, "VMState") == "running"
 
-def rdp_enabled(vm):
-	return get_port(vm) != "-1"
+	def rdp_enabled(self, vm):
+		return self.get_port(vm) != "-1"
 
-def manage_vm(vm):
-	Menu.show_loading()
+	def manage_vm(self, vm):
+		Menu.show_loading()
 
-	if is_on(vm):
-		port = str(get_port(vm))
-		cmenu = Menu(vm[0] + " | RDP: " + port)
-		if rdp_enabled(vm):
-			cmenu.add_item(MenuItem("Connect RDP", (connect_rdp, port)))
-		cmenu.add_item(MenuItem("Turn Off",        (power_menu,  vm)))
+		if self.is_on(vm):
+			port = str(self.get_port(vm))
+			cmenu = Menu(vm[0] + " | RDP: " + port)
+			if self.rdp_enabled(vm):
+				cmenu.add_item(MenuItem("Connect RDP", (self.connect_rdp, port)))
+			cmenu.add_item(MenuItem("Turn Off",        (self.power_menu,  vm)))
+			cmenu.add_item(MenuItem("Back",            cmenu.close))
+		else:
+			cmenu = Menu(vm[0] + " | OFF")
+		
+		cmenu.add_item(MenuItem("Power Menu",      (self.power_menu, vm)))
+		cmenu.add_item(MenuItem("Create Snapshot", (self.create_snapshot, vm)))
 		cmenu.add_item(MenuItem("Back",            cmenu.close))
-	else:
-		cmenu = Menu(vm[0] + " | OFF")
-	
-	cmenu.add_item(MenuItem("Power Menu",      (power_menu, vm)))
-	cmenu.add_item(MenuItem("Create Snapshot", (create_snapshot, vm)))
-	cmenu.add_item(MenuItem("Back",            cmenu.close))
-	
-	cmenu.draw()
+		
+		cmenu.draw()
 
-def connect_rdp(port):
-	# Check for active X11 Environment
-	if no_desktop() == False:
-		cmd = "remmina -c rdp://" + ssh_host + ":" + port
-		process = subprocess.Popen(cmd, stdout=None, stderr=None, shell=True)
-	
-# Return True if vcr is being run remotely
-def no_desktop():
-	return (os.environ.get('DISPLAY') == None)
+	def connect_rdp(self, port):
+		# Check for active X11 Environment
+		if self.no_desktop() == False:
+			cmd = "remmina -c rdp://" + self.current_host + ":" + port
+			process = subprocess.Popen(cmd, stdout=None, stderr=None, shell=True)
+		
+	# Return True if vcr is being run remotely
+	@staticmethod
+	def no_desktop():
+		return (os.environ.get('DISPLAY') == None)
 
-def create_snapshot(vm):
-	cmd = "VBoxManage snapshot " + vm[1] + " & > /dev/null 2>&1"
-	remote_cmd(cmd)
+	def create_snapshot(self, vm):
+		cmd = "VBoxManage snapshot " + vm[1] + " & > /dev/null 2>&1"
+		self.remote_cmd(cmd)
 
-def power_menu(vm):
-	Menu.show_loading()
+	def power_menu(self, vm):
+		Menu.show_loading()
 
-	vmname = vm[0]
-	vmguid = vm[1]
+		vmname = vm[0]
+		vmguid = vm[1]
 
-	normal     = "VBoxManage startvm "      + vmguid + " --type gui & > /dev/null 2>&1"
-	headless   = "VBoxManage startvm "      + vmguid + " --type headless & > /dev/null 2>&1"
-	detached   = "VBoxManage startvm "      + vmguid + " --type separate & > /dev/null 2>&1"
-	resume     = "VBoxManage controlvm "    + vmguid + " resume & > /dev/null 2>&1"
-	acpioff    = "VBoxManage controlvm "    + vmguid + " acpipowerbutton & > /dev/null 2>&1"
-	forceoff   = "VBoxManage controlvm "    + vmguid + " poweroff & > /dev/null 2>&1"
-	savestate  = "VBoxManage controlvm "    + vmguid + " savestate & > /dev/null 2>&1"
-	reset      = "VBoxManage controlvm "    + vmguid + " reset & > /dev/null 2>&1"
-	discard    = "VBoxManage discardstate " + vmguid + " & > /dev/null 2>&1"
+		normal     = "VBoxManage startvm "      + vmguid + " --type gui & > /dev/null 2>&1"
+		headless   = "VBoxManage startvm "      + vmguid + " --type headless & > /dev/null 2>&1"
+		detached   = "VBoxManage startvm "      + vmguid + " --type separate & > /dev/null 2>&1"
+		resume     = "VBoxManage controlvm "    + vmguid + " resume & > /dev/null 2>&1"
+		acpioff    = "VBoxManage controlvm "    + vmguid + " acpipowerbutton & > /dev/null 2>&1"
+		forceoff   = "VBoxManage controlvm "    + vmguid + " poweroff & > /dev/null 2>&1"
+		savestate  = "VBoxManage controlvm "    + vmguid + " savestate & > /dev/null 2>&1"
+		reset      = "VBoxManage controlvm "    + vmguid + " reset & > /dev/null 2>&1"
+		discard    = "VBoxManage discardstate " + vmguid + " & > /dev/null 2>&1"
 
-	state = get_vm_property(vm, "VMState")
+		state = self.get_vm_property(vm, "VMState")
 
-	pmenu = Menu("Power Options for: " + vmname)
-	if state == "running":
-		pmenu.add_item(MenuItem("Turn Off (Save State)", (remote_cmd, savestate)))
-		pmenu.add_item(MenuItem("Turn Off (ACPI)",       (remote_cmd, acpioff)))
-		pmenu.add_item(MenuItem("Turn Off (Poweroff)",   (remote_cmd, forceoff)))
-		pmenu.add_item(MenuItem("Reset (Force)",         (remote_cmd, reset)))
-	elif state == "saved":
-		pmenu.add_item(MenuItem("Resume Saved State",    (remote_cmd, resume)))
-		pmenu.add_item(MenuItem("Discard Saved State",   (remote_cmd, discard)))
-	else:
-		pmenu.add_item(MenuItem("Turn On (Headless)",    (remote_cmd, headless)))
-		pmenu.add_item(MenuItem("Turn On (Detached)",    (remote_cmd, detached)))
-		pmenu.add_item(MenuItem("Turn On (GUI)",         (remote_cmd, normal)))
-	
-	pmenu.add_item(MenuItem("Back", pmenu.close))
-	pmenu.draw()
+		pmenu = Menu("Power Options for: " + vmname)
+		if state == "running":
+			pmenu.add_item(MenuItem("Turn Off (Save State)", (self.remote_cmd, savestate)))
+			pmenu.add_item(MenuItem("Turn Off (ACPI)",       (self.remote_cmd, acpioff)))
+			pmenu.add_item(MenuItem("Turn Off (Poweroff)",   (self.remote_cmd, forceoff)))
+			pmenu.add_item(MenuItem("Reset (Force)",         (self.remote_cmd, reset)))
+		elif state == "saved":
+			pmenu.add_item(MenuItem("Resume Saved State",    (self.remote_cmd, resume)))
+			pmenu.add_item(MenuItem("Discard Saved State",   (self.remote_cmd, discard)))
+		else:
+			pmenu.add_item(MenuItem("Turn On (Headless)",    (self.remote_cmd, headless)))
+			pmenu.add_item(MenuItem("Turn On (Detached)",    (self.remote_cmd, detached)))
+			pmenu.add_item(MenuItem("Turn On (GUI)",         (self.remote_cmd, normal)))
+		
+		pmenu.add_item(MenuItem("Back", pmenu.close))
+		pmenu.draw()
 
 if __name__ == '__main__':
 	try:
-		curses.wrapper(main)
+		vbox = VBoxCurses()
+		curses.wrapper(vbox.main)
 	except KeyboardInterrupt:
 		print("Bye!")
 		sys.exit(0)
