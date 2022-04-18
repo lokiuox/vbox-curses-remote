@@ -6,7 +6,7 @@ This is a quick and dirty solution to managing numerous virtual machines on sing
 
 Dependencies: python3, curses, xfreerdp, openssh or equivalent
 
-## Completed:
+## Completed (from original repo):
 * Curses Menu for selecting machines
 * MenuItem object with tooltip
 * Open xfreerdp for the selected machine
@@ -17,4 +17,5 @@ Dependencies: python3, curses, xfreerdp, openssh or equivalent
 * Local mode
 * Multiple hosts (just add them to the list on top of the "vcr" script
 * Automatic SSH tunnel for RDP
+* Changed rdesktop -> xfreerdp
 * A bunch of refactoring and bugfixing
