@@ -8,8 +8,7 @@ import subprocess
 import random
 
 hosts = [
-	"localhost",
-	"wgpc"
+	"localhost"
 ]
 
 class Menu:
