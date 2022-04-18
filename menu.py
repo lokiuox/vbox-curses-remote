@@ -36,7 +36,7 @@ class Menu:
 		Menu.loading_scr = Menu("Loading...")
 
 
-	def __init__(self, *title):
+	def __init__(self, title=None, prev=None):
 		self.items     = []     # Array - MenuItem array
 
 		# Default Values
@@ -45,15 +45,12 @@ class Menu:
 		self.closemenu = False  # Bool - This kills the crab, er... menu
 		self.tooltips  = False   # Bool - Display item tooltips under menu title
 		self.width     = 1      # Int  - Minimum width of the menu
-		self.refresh   = 5      # Int  - Refresh rate in seconds
+		self.refresh   = 3      # Int  - Refresh rate in seconds
 										# Menu also updates upon selection
-		self.thread_break = False
+		self.previous=prev
 
 		# Set the title if provided
-		if len(title) > 0:
-			self.title  = title[0]
-		else:
-			self.title  = None
+		self.title = title
 
 	def update_thread(self):
 		while not self.closemenu:
@@ -87,10 +84,9 @@ class Menu:
 
 	def close(self):
 		self.closemenu = True
-		self.thread_break = True
 
 	def draw(self, x=None, y=None):
-		
+
 		if x is None:
 			x = Menu.x
 		if y is None:
@@ -204,7 +200,6 @@ class Menu:
 		
 		# TODO: Clear the menu only, not whole curses screen.
 		Menu.screen.clear()
-		self.thread_break = True
 
 class MenuItem:
 

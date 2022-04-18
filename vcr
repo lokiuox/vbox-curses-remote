@@ -2,6 +2,7 @@
 import curses
 import os, sys
 import subprocess
+import random
 from menu import *
 
 hosts = [
@@ -13,12 +14,15 @@ class VBoxCurses:
 	def __init__(self):
 		self.current_host=""
 
+	def is_local(self):
+		return self.current_host == "localhost"
+
 	def main(self, screen):
 		Menu.global_init(screen, 2, 4)
 		self.select_host()
 		
 	def remote_cmd(self, cmd):
-		if self.current_host == "localhost":
+		if self.is_local():
 			return subprocess.check_output(cmd + "; exit 0", shell=True).decode("utf-8")
 		else:
 			return subprocess.check_output("ssh -t -q " + self.current_host + " " + cmd + "; exit 0", shell=True).decode("utf-8")
@@ -93,12 +97,10 @@ class VBoxCurses:
 			cmenu = Menu(vm[0] + " | RDP: " + port)
 			if self.rdp_enabled(vm):
 				cmenu.add_item(MenuItem("Connect RDP", (self.connect_rdp, port)))
-			cmenu.add_item(MenuItem("Turn Off",        (self.power_menu,  vm)))
-			cmenu.add_item(MenuItem("Back",            cmenu.close))
 		else:
 			cmenu = Menu(vm[0] + " | OFF")
 		
-		cmenu.add_item(MenuItem("Power Menu",      (self.power_menu, vm)))
+		cmenu.add_item(MenuItem("Power Menu",      (self.power_menu, vm, cmenu)))
 		cmenu.add_item(MenuItem("Create Snapshot", (self.create_snapshot, vm)))
 		cmenu.add_item(MenuItem("Back",            cmenu.close))
 		
@@ -107,8 +109,15 @@ class VBoxCurses:
 	def connect_rdp(self, port):
 		# Check for active X11 Environment
 		if self.no_desktop() == False:
-			cmd = "remmina -c rdp://" + self.current_host + ":" + port
-			process = subprocess.Popen(cmd, stdout=None, stderr=None, shell=True)
+			target = self.current_host + ":" + str(port)
+			if not self.is_local():
+				local_port = random.randint(10000, 65534)
+				cmd = f"ssh -TqfN -L{str(local_port)}:127.0.0.1:{str(port)} {self.current_host}"
+				subprocess.Popen(cmd, stdout=None, stderr=None, shell=True)
+				target = f"127.0.0.1:{str(local_port)}"
+
+			cmd = "xfreerdp /dynamic-resolution /w:1600 /h:900 /cert:ignore +auto-reconnect /v:" + target + " &>/dev/null 2>&1"
+			subprocess.Popen(cmd, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT, shell=True)
 		
 	# Return True if vcr is being run remotely
 	@staticmethod
@@ -119,7 +128,12 @@ class VBoxCurses:
 		cmd = "VBoxManage snapshot " + vm[1] + " & > /dev/null 2>&1"
 		self.remote_cmd(cmd)
 
-	def power_menu(self, vm):
+	def run_and_go_back(self, cmd, menu):
+		self.remote_cmd(cmd)
+		menu.close()
+		menu.previous.close()
+
+	def power_menu(self, vm, prev):
 		Menu.show_loading()
 
 		vmname = vm[0]
@@ -137,19 +151,20 @@ class VBoxCurses:
 
 		state = self.get_vm_property(vm, "VMState")
 
-		pmenu = Menu("Power Options for: " + vmname)
+
+		pmenu = Menu("Power Options for: " + vmname, prev)
 		if state == "running":
-			pmenu.add_item(MenuItem("Turn Off (Save State)", (self.remote_cmd, savestate)))
-			pmenu.add_item(MenuItem("Turn Off (ACPI)",       (self.remote_cmd, acpioff)))
-			pmenu.add_item(MenuItem("Turn Off (Poweroff)",   (self.remote_cmd, forceoff)))
-			pmenu.add_item(MenuItem("Reset (Force)",         (self.remote_cmd, reset)))
+			pmenu.add_item(MenuItem("Turn Off (Save State)", (self.run_and_go_back, savestate, pmenu)))
+			pmenu.add_item(MenuItem("Turn Off (ACPI)",       (self.run_and_go_back, acpioff, pmenu)))
+			pmenu.add_item(MenuItem("Turn Off (Poweroff)",   (self.run_and_go_back, forceoff, pmenu)))
+			pmenu.add_item(MenuItem("Reset (Force)",         (self.run_and_go_back, reset, pmenu)))
 		elif state == "saved":
-			pmenu.add_item(MenuItem("Resume Saved State",    (self.remote_cmd, resume)))
-			pmenu.add_item(MenuItem("Discard Saved State",   (self.remote_cmd, discard)))
+			pmenu.add_item(MenuItem("Resume Saved State",    (self.run_and_go_back, resume, pmenu)))
+			pmenu.add_item(MenuItem("Discard Saved State",   (self.run_and_go_back, discard, pmenu)))
 		else:
-			pmenu.add_item(MenuItem("Turn On (Headless)",    (self.remote_cmd, headless)))
-			pmenu.add_item(MenuItem("Turn On (Detached)",    (self.remote_cmd, detached)))
-			pmenu.add_item(MenuItem("Turn On (GUI)",         (self.remote_cmd, normal)))
+			pmenu.add_item(MenuItem("Turn On (Headless)",    (self.run_and_go_back, headless, pmenu)))
+			pmenu.add_item(MenuItem("Turn On (Detached)",    (self.run_and_go_back, detached, pmenu)))
+			pmenu.add_item(MenuItem("Turn On (GUI)",         (self.run_and_go_back, normal, pmenu)))
 		
 		pmenu.add_item(MenuItem("Back", pmenu.close))
 		pmenu.draw()
