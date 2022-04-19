@@ -358,19 +358,32 @@ class VBoxCurses:
 		return self.get_vm_property(vm, "VMState") == "running"
 
 	def rdp_enabled(self, vm):
-		return self.get_port(vm) != "-1"
+		return self.get_port(vm) is not None
+
+	def enable_disable_rdp(self, vm, menu):
+		if self.rdp_enabled(vm):
+			resp = self.remote_cmd(f"VBoxManage controlvm {vm[1]} vrde off")
+		else:
+			resp = self.remote_cmd(f"VBoxManage controlvm {vm[1]} vrde on")
+		menu.close()
+		return resp
+
+	def set_vrde_to_rdp(self):
+		return self.remote_cmd('VBoxManage setproperty vrdeextpack "Oracle VM VirtualBox Extension Pack"')
 
 	def manage_vm(self, vm):
 		Menu.show_loading()
 
 		if self.is_on(vm):
-			port = str(self.get_port(vm))
+			port = self.get_port(vm)
+			port = str(port) if port else "OFF"
 			cmenu = Menu(vm[0] + " | RDP: " + port)
 			if self.rdp_enabled(vm):
 				cmenu.add_item(MenuItem("Connect RDP", (self.connect_rdp, port)))
 		else:
 			cmenu = Menu(vm[0] + " | OFF")
 		
+		cmenu.add_item(MenuItem("Enable/Disable RDP", (self.enable_disable_rdp, vm, cmenu)))
 		cmenu.add_item(MenuItem("Power Menu",      (self.power_menu, vm, cmenu)))
 		cmenu.add_item(MenuItem("Create Snapshot", (self.create_snapshot, vm)))
 		cmenu.add_item(MenuItem("Back",            cmenu.close))
@@ -380,6 +393,7 @@ class VBoxCurses:
 	def connect_rdp(self, port):
 		# Check for active X11 Environment
 		if self.no_desktop() == False:
+			self.set_vrde_to_rdp()
 			target = self.current_host + ":" + str(port)
 			if not self.is_local():
 				local_port = random.randint(10000, 65534)
@@ -396,7 +410,7 @@ class VBoxCurses:
 		return (os.environ.get('DISPLAY') == None)
 
 	def create_snapshot(self, vm):
-		cmd = "VBoxManage snapshot " + vm[1] + " & > /dev/null 2>&1"
+		cmd = f'VBoxManage snapshot {vm[1]} take $(date +%Y-%m-%d_%H-%M) & > /dev/null 2>&1'
 		self.remote_cmd(cmd)
 
 	def run_and_go_back(self, cmd, menu):
